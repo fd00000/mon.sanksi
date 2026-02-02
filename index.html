@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DDMS - Monitoring Sanksi Region II</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; background: #f1f5f9; }
+        .sidebar { width: 260px; background: #0f172a; height: 100vh; position: fixed; z-index: 1001; color: white; }
+        .main-content { margin-left: 260px; min-height: 100vh; }
+        .card { background: white; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        #map { height: 300px !important; width: 100%; border-radius: 8px; z-index: 1; border: 1px solid #cbd5e1; }
+        .status-pill { padding: 3px 10px; border-radius: 4px; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+        .loading-overlay { display:flex; position: fixed; top:0; left:0; width:100%; height:100%; background:white; z-index:9999; justify-content:center; align-items:center; }
+    </style>
+</head>
+<body>
+
+    <div class="loading-overlay" id="loader">
+        <div class="text-center">
+            <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent mx-auto mb-4"></div>
+            <p class="text-xs font-bold text-slate-500 tracking-widest uppercase">Sinkronisasi Data DDMS...</p>
+        </div>
+    </div>
+
+    <aside class="sidebar p-6 flex flex-col">
+        <div class="mb-10 text-center">
+            <img src="https://uploads.onecompiler.io/44ana4zau/44ana4h2n/LOGO%20PATRA%20NIAGA.jpg" class="h-10 brightness-200 mx-auto">
+            <p class="text-[10px] text-slate-500 mt-2 font-black uppercase tracking-tighter">Region II Sumbagsel</p>
+        </div>
+        <nav class="space-y-1">
+            <button onclick="location.reload()" class="w-full flex items-center p-3 bg-blue-700 rounded-lg text-xs font-bold uppercase tracking-wider">
+                <i class="fa-solid fa-gauge-high mr-3 text-blue-300"></i> Dashboard Utama
+            </button>
+        </nav>
+        <div class="mt-auto pt-6 border-t border-slate-800 text-center">
+            <p class="text-[9px] text-emerald-400 font-bold uppercase animate-pulse">● System Connected</p>
+        </div>
+    </aside>
+
+    <div class="main-content">
+        <header class="bg-white border-b p-4 flex justify-between items-center sticky top-0 z-[1000] shadow-sm">
+            <div>
+                <h1 class="text-sm font-black text-slate-800 uppercase tracking-widest">Database Monitoring Sanksi</h1>
+                <p class="text-[9px] text-slate-400 font-bold uppercase">Dealer Management System Integration</p>
+            </div>
+            <button onclick="fetchSheetData()" class="bg-slate-900 text-white px-5 py-2 rounded text-[10px] font-bold uppercase hover:bg-blue-700 transition-all flex items-center">
+                <i class="fa-solid fa-sync mr-2"></i> Sinkron Data Sheets
+            </button>
+        </header>
+
+        <main class="p-6 space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2 card p-3 relative">
+                    <h3 class="text-[10px] font-black text-slate-400 uppercase mb-2 px-1 flex items-center">
+                        <i class="fa-solid fa-map-location-dot mr-2 text-blue-600"></i> Sebaran Geografis Pelanggaran
+                    </h3>
+                    <div id="map"></div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-4">
+                    <div class="card p-4 border-l-4 border-red-600 flex justify-between items-center">
+                        <div>
+                            <p class="text-[9px] font-bold text-slate-400 uppercase">Kategori PHU</p>
+                            <h2 id="countPHU" class="text-3xl font-black text-slate-800 leading-none">0</h2>
+                        </div>
+                        <i class="fa-solid fa-ban text-red-100 text-3xl"></i>
+                    </div>
+                    <div class="card p-4 border-l-4 border-orange-500 flex justify-between items-center">
+                        <div>
+                            <p class="text-[9px] font-bold text-slate-400 uppercase">Kategori Skorsing</p>
+                            <h2 id="countSkorsing" class="text-3xl font-black text-slate-800 leading-none">0</h2>
+                        </div>
+                        <i class="fa-solid fa-clock text-orange-100 text-3xl"></i>
+                    </div>
+                    <div class="card p-4 border-l-4 border-blue-500 bg-blue-50/50">
+                        <p class="text-[10px] font-black text-blue-700 uppercase mb-1">Status Pengawasan</p>
+                        <p class="text-[9px] text-slate-500 font-medium">Monitoring titik lokasi real-time berdasarkan input Lat/Lng koordinat Google Sheets.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card overflow-hidden">
+                <div class="p-4 bg-white border-b flex justify-between items-center">
+                    <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Database Sanksi Aktif</span>
+                    <div class="relative">
+                        <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Cari Agen..." class="text-[10px] border px-8 py-2 w-56 rounded-full outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <i class="fa-solid fa-search absolute left-3 top-2.5 text-slate-300 text-[10px]"></i>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-[11px]" id="sanksiTable">
+                        <thead class="bg-slate-50 text-slate-400 font-black uppercase">
+                            <tr class="border-b">
+                                <th class="p-4">ID</th>
+                                <th class="p-4">Nama Agen</th>
+                                <th class="p-4">SA / Wilayah</th>
+                                <th class="p-4">Sanksi</th>
+                                <th class="p-4">Berlaku S/D</th>
+                                <th class="p-4 text-center">PDF</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody" class="divide-y divide-slate-100 font-medium text-slate-700">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // LINK SPREADSHEET ANDA
+        const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTwfjwCymNlkp3pXQCLbQkbjXsgkxRKcRQh8uKocTVi4kRm53B0PLM9EQ3ZTMdCEw0Li_fJPyZYCGjL/pub?gid=0&single=true&output=csv';
+        
+        let map, markers = [];
+
+        function initMap() {
+            if (map != undefined) { map.remove(); }
+            map = L.map('map').setView([-3.31, 104.37], 6);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: 'Pertamina Region II'
+            }).addTo(map);
+
+            // Memastikan peta merender dengan benar pada tampilan pertama
+            setTimeout(() => { map.invalidateSize(); }, 800);
+        }
+
+        async function fetchSheetData() {
+            document.getElementById('loader').style.display = 'flex';
+            Papa.parse(csvUrl, {
+                download: true,
+                header: true,
+                complete: function(results) {
+                    processData(results.data);
+                    document.getElementById('loader').style.display = 'none';
+                }
+            });
+        }
+
+        function processData(data) {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            markers.forEach(m => map.removeLayer(m));
+            markers = [];
+
+            let phu = 0, skors = 0;
+
+            data.forEach(row => {
+                if(!row.ID) return;
+
+                // Hitung Statistik
+                if(row.Jenis_Sanksi === 'PHU') phu++;
+                if(row.Jenis_Sanksi === 'Skorsing') skors++;
+
+                // Warna Sanksi
+                let pillColor = row.Warna === 'red' ? 'bg-red-100 text-red-700' : (row.Warna === 'orange' ? 'bg-orange-100 text-orange-700' : 'bg-yellow-100 text-yellow-700');
+
+                // Render Baris Tabel
+                tbody.innerHTML += `
+                    <tr class="hover:bg-blue-50/50 transition border-b border-slate-50">
+                        <td class="p-4 font-mono font-bold text-blue-800">${row.ID}</td>
+                        <td class="p-4 font-bold uppercase text-slate-800">${row.Nama}</td>
+                        <td class="p-4 text-slate-500 font-semibold">${row.SA}</td>
+                        <td class="p-4"><span class="status-pill ${pillColor}">${row.Jenis_Sanksi}</span></td>
+                        <td class="p-4 text-slate-500 font-black">${row.Masa_Berlaku}</td>
+                        <td class="p-4 text-center">
+                            <a href="${row.Link_Surat}" target="_blank" class="text-red-500 hover:text-red-700 bg-red-50 p-2 rounded shadow-sm inline-block">
+                                <i class="fa-solid fa-file-pdf"></i>
+                            </a>
+                        </td>
+                    </tr>
+                `;
+
+                // LOGIKA MAP: Gunakan koordinat Lat dan Lng dari Spreadsheet
+                if (row.Lat && row.Lng) {
+                    const markerColor = row.Warna === 'red' ? '#dc2626' : (row.Warna === 'orange' ? '#f97316' : '#eab308');
+                    const m = L.circleMarker([parseFloat(row.Lat), parseFloat(row.Lng)], {
+                        radius: 9,
+                        fillColor: markerColor,
+                        color: '#fff',
+                        weight: 2,
+                        fillOpacity: 1
+                    }).addTo(map).bindPopup(`
+                        <div style="font-family:'Inter';">
+                            <b style="text-transform:uppercase; color:#0f172a;">${row.Nama}</b><br>
+                            <span style="font-size:10px; color:#64748b;">Wilayah: ${row.SA}</span><br>
+                            <div style="margin-top:5px; font-weight:bold; color:${markerColor}">${row.Jenis_Sanksi}</div>
+                        </div>
+                    `);
+                    markers.push(m);
+                }
+            });
+
+            document.getElementById('countPHU').innerText = phu;
+            document.getElementById('countSkorsing').innerText = skors;
+
+            // Auto-Zoom: Sesuaikan pandangan peta agar semua titik terlihat
+            if (markers.length > 0) {
+                const group = new L.featureGroup(markers);
+                map.fitBounds(group.getBounds().pad(0.2));
+            }
+        }
+
+        function filterTable() {
+            let input = document.getElementById("searchInput").value.toUpperCase();
+            let rows = document.getElementById("tableBody").getElementsByTagName("tr");
+            for (let i = 0; i < rows.length; i++) {
+                let txtValue = rows[i].textContent || rows[i].innerText;
+                rows[i].style.display = txtValue.toUpperCase().indexOf(input) > -1 ? "" : "none";
+            }
+        }
+
+        window.onload = () => {
+            initMap();
+            fetchSheetData();
+        };
+    </script>
+</body>
+</html>
