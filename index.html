@@ -3,143 +3,153 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DDMS - Monitoring Sanksi Region II</title>
+    <title>DDMS Mobile Ready - Region II</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://leaflet.github.io/Leaflet.heat/dist/leaflet-heat.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
-        body { font-family: 'Inter', sans-serif; background: #f1f5f9; }
-        .sidebar { width: 260px; background: #0f172a; height: 100vh; position: fixed; z-index: 1001; color: white; }
-        .main-content { margin-left: 260px; min-height: 100vh; }
-        .card { background: white; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        #map { height: 300px !important; width: 100%; border-radius: 8px; z-index: 1; border: 1px solid #cbd5e1; }
-        .status-pill { padding: 3px 10px; border-radius: 4px; font-size: 10px; font-weight: 800; text-transform: uppercase; }
-        .loading-overlay { display:flex; position: fixed; top:0; left:0; width:100%; height:100%; background:white; z-index:9999; justify-content:center; align-items:center; }
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f8fafc; margin: 0; }
+        
+        /* Responsive Sidebar */
+        .sidebar { width: 280px; background: #020617; height: 100vh; position: fixed; z-index: 100; color: white; transition: 0.3s; }
+        .main-content { margin-left: 280px; min-height: 100vh; transition: 0.3s; }
+        
+        /* Mobile Breakpoints */
+        @media (max-width: 1024px) {
+            .sidebar { width: 0; overflow: hidden; padding: 0; }
+            .main-content { margin-left: 0; }
+            .sidebar.active { width: 280px; padding: 2rem; }
+        }
+
+        #map { height: 300px !important; width: 100%; border-radius: 12px; z-index: 5; }
+        
+        /* Modal Fullscreen on Mobile */
+        #previewModal { 
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 2000; padding: 10px;
+        }
+        .modal-container { 
+            background: white; width: 100%; height: 95vh; margin: auto; border-radius: 12px; display: flex; flex-direction: column; 
+        }
     </style>
 </head>
 <body>
 
-    <div class="loading-overlay" id="loader">
+    <div id="loader" class="fixed inset-0 bg-white z-[3000] flex justify-center align-center items-center">
         <div class="text-center">
             <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent mx-auto mb-4"></div>
-            <p class="text-xs font-bold text-slate-500 tracking-widest uppercase">Sinkronisasi Data DDMS...</p>
+            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Memuat Dashboard...</p>
         </div>
     </div>
 
-    <aside class="sidebar p-6 flex flex-col">
-        <div class="mb-10 text-center">
-            <img src="https://uploads.onecompiler.io/44ana4zau/44ana4h2n/LOGO%20PATRA%20NIAGA.jpg" class="h-10 brightness-200 mx-auto">
-            <p class="text-[10px] text-slate-500 mt-2 font-black uppercase tracking-tighter">Region II Sumbagsel</p>
+    <div id="previewModal">
+        <div class="modal-container">
+            <div class="p-4 border-b flex justify-between items-center bg-slate-900 text-white rounded-t-xl">
+                <span id="modalTitle" class="text-[10px] font-bold uppercase truncate">Surat Sanksi</span>
+                <button onclick="closePreview()" class="bg-red-600 px-4 py-2 rounded-lg text-[10px] font-black">TUTUP</button>
+            </div>
+            <iframe id="pdfFrame" src="" class="w-full flex-grow border-none"></iframe>
         </div>
-        <nav class="space-y-1">
-            <button onclick="location.reload()" class="w-full flex items-center p-3 bg-blue-700 rounded-lg text-xs font-bold uppercase tracking-wider">
-                <i class="fa-solid fa-gauge-high mr-3 text-blue-300"></i> Dashboard Utama
-            </button>
+    </div>
+
+    <header class="lg:hidden bg-slate-900 text-white p-4 flex justify-between items-center sticky top-0 z-[150]">
+        <img src="https://uploads.onecompiler.io/44ana4zau/44ana4h2n/LOGO%20PATRA%20NIAGA.jpg" class="h-6 brightness-200">
+        <button onclick="toggleSidebar()" class="text-xl"><i class="fa-solid fa-bars"></i></button>
+    </header>
+
+    <aside id="sidebar" class="sidebar p-8">
+        <div class="hidden lg:flex flex-col items-center mb-10">
+            <img src="https://uploads.onecompiler.io/44ana4zau/44ana4h2n/LOGO%20PATRA%20NIAGA.jpg" class="h-10 brightness-200 mb-4">
+            <h2 class="text-[10px] font-black text-blue-400 uppercase tracking-widest">Region II</h2>
+        </div>
+        <nav class="space-y-4">
+            <button class="w-full flex items-center p-4 bg-blue-600 rounded-xl text-xs font-bold uppercase tracking-widest"><i class="fa-solid fa-home mr-3"></i> Home</button>
+            <button onclick="fetchSheetData()" class="w-full flex items-center p-4 bg-slate-800 rounded-xl text-xs font-bold uppercase tracking-widest mt-4"><i class="fa-solid fa-sync mr-3"></i> Sync Data</button>
         </nav>
-        <div class="mt-auto pt-6 border-t border-slate-800 text-center">
-            <p class="text-[9px] text-emerald-400 font-bold uppercase animate-pulse">● System Connected</p>
-        </div>
     </aside>
 
     <div class="main-content">
-        <header class="bg-white border-b p-4 flex justify-between items-center sticky top-0 z-[1000] shadow-sm">
-            <div>
-                <h1 class="text-sm font-black text-slate-800 uppercase tracking-widest">Database Monitoring Sanksi</h1>
-                <p class="text-[9px] text-slate-400 font-bold uppercase">Dealer Management System Integration</p>
-            </div>
-            <button onclick="fetchSheetData()" class="bg-slate-900 text-white px-5 py-2 rounded text-[10px] font-bold uppercase hover:bg-blue-700 transition-all flex items-center">
-                <i class="fa-solid fa-sync mr-2"></i> Sinkron Data Sheets
-            </button>
+        <header class="hidden lg:flex bg-white border-b p-6 justify-between items-center sticky top-0 z-[50]">
+            <h1 class="text-sm font-black text-slate-800 uppercase tracking-widest">Intelligence Monitoring Sanksi</h1>
+            <span class="text-[10px] bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full font-bold uppercase">● Live System</span>
         </header>
 
-        <main class="p-6 space-y-6">
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div class="lg:col-span-2 card p-3 relative">
-                    <h3 class="text-[10px] font-black text-slate-400 uppercase mb-2 px-1 flex items-center">
-                        <i class="fa-solid fa-map-location-dot mr-2 text-blue-600"></i> Sebaran Geografis Pelanggaran
-                    </h3>
+        <main class="p-4 lg:p-8 space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6">
+                <div class="lg:col-span-3 bg-white p-3 rounded-2xl border shadow-sm">
                     <div id="map"></div>
                 </div>
-
-                <div class="grid grid-cols-1 gap-4">
-                    <div class="card p-4 border-l-4 border-red-600 flex justify-between items-center">
-                        <div>
-                            <p class="text-[9px] font-bold text-slate-400 uppercase">Kategori PHU</p>
-                            <h2 id="countPHU" class="text-3xl font-black text-slate-800 leading-none">0</h2>
-                        </div>
-                        <i class="fa-solid fa-ban text-red-100 text-3xl"></i>
+                <div class="grid grid-cols-2 lg:grid-cols-1 gap-4">
+                    <div class="bg-white p-5 rounded-2xl border-l-4 border-l-red-600 shadow-sm text-center lg:text-left">
+                        <p class="text-[9px] font-black text-slate-400 uppercase">Critical (H-3)</p>
+                        <h2 id="countCritical" class="text-3xl font-black text-slate-800">0</h2>
                     </div>
-                    <div class="card p-4 border-l-4 border-orange-500 flex justify-between items-center">
-                        <div>
-                            <p class="text-[9px] font-bold text-slate-400 uppercase">Kategori Skorsing</p>
-                            <h2 id="countSkorsing" class="text-3xl font-black text-slate-800 leading-none">0</h2>
-                        </div>
-                        <i class="fa-solid fa-clock text-orange-100 text-3xl"></i>
-                    </div>
-                    <div class="card p-4 border-l-4 border-blue-500 bg-blue-50/50">
-                        <p class="text-[10px] font-black text-blue-700 uppercase mb-1">Status Pengawasan</p>
-                        <p class="text-[9px] text-slate-500 font-medium">Monitoring titik lokasi real-time berdasarkan input Lat/Lng koordinat Google Sheets.</p>
+                    <div class="bg-white p-5 rounded-2xl border-l-4 border-l-blue-600 shadow-sm text-center lg:text-left">
+                        <p class="text-[9px] font-black text-slate-400 uppercase">Total Agen</p>
+                        <h2 id="totalAgen" class="text-3xl font-black text-slate-800">0</h2>
                     </div>
                 </div>
             </div>
 
-            <div class="card overflow-hidden">
-                <div class="p-4 bg-white border-b flex justify-between items-center">
-                    <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Database Sanksi Aktif</span>
-                    <div class="relative">
-                        <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Cari Agen..." class="text-[10px] border px-8 py-2 w-56 rounded-full outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                        <i class="fa-solid fa-search absolute left-3 top-2.5 text-slate-300 text-[10px]"></i>
-                    </div>
+            <div class="bg-white rounded-2xl border shadow-sm overflow-hidden">
+                <div class="p-5 border-b flex flex-col lg:flex-row justify-between items-center gap-4">
+                    <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center lg:text-left">Database Sanksi Aktif</span>
+                    <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Cari..." class="text-xs border px-4 py-2 w-full lg:w-64 rounded-xl outline-none bg-slate-50 focus:bg-white transition-all">
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left text-[11px]" id="sanksiTable">
                         <thead class="bg-slate-50 text-slate-400 font-black uppercase">
-                            <tr class="border-b">
-                                <th class="p-4">ID</th>
-                                <th class="p-4">Nama Agen</th>
-                                <th class="p-4">SA / Wilayah</th>
+                            <tr>
+                                <th class="p-4">Informasi Agen</th>
                                 <th class="p-4">Sanksi</th>
                                 <th class="p-4">Berlaku S/D</th>
-                                <th class="p-4 text-center">PDF</th>
+                                <th class="p-4 text-center">Surat</th>
                             </tr>
                         </thead>
-                        <tbody id="tableBody" class="divide-y divide-slate-100 font-medium text-slate-700">
-                            </tbody>
+                        <tbody id="tableBody" class="divide-y divide-slate-100 font-semibold"></tbody>
                     </table>
                 </div>
             </div>
         </main>
     </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // LINK SPREADSHEET ANDA
         const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTwfjwCymNlkp3pXQCLbQkbjXsgkxRKcRQh8uKocTVi4kRm53B0PLM9EQ3ZTMdCEw0Li_fJPyZYCGjL/pub?gid=0&single=true&output=csv';
-        
-        let map, markers = [];
+        let map, markers = [], heatLayer;
+
+        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('active'); }
 
         function initMap() {
             if (map != undefined) { map.remove(); }
-            map = L.map('map').setView([-3.31, 104.37], 6);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: 'Pertamina Region II'
-            }).addTo(map);
+            map = L.map('map', { zoomControl: false }).setView([-3.31, 104.37], 6);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+            L.control.zoom({ position: 'bottomright' }).addTo(map);
+            setTimeout(() => map.invalidateSize(), 800);
+        }
 
-            // Memastikan peta merender dengan benar pada tampilan pertama
-            setTimeout(() => { map.invalidateSize(); }, 800);
+        function openPreview(link, title) {
+            document.getElementById('modalTitle').innerText = title;
+            // Handle Google Drive Link
+            let previewLink = link.includes('drive.google.com') ? link.replace('/view', '/preview') : link;
+            document.getElementById('pdfFrame').src = previewLink;
+            document.getElementById('previewModal').style.display = 'flex';
+        }
+
+        function closePreview() {
+            document.getElementById('previewModal').style.display = 'none';
+            document.getElementById('pdfFrame').src = '';
         }
 
         async function fetchSheetData() {
-            document.getElementById('loader').style.display = 'flex';
             Papa.parse(csvUrl, {
-                download: true,
-                header: true,
-                complete: function(results) {
-                    processData(results.data);
+                download: true, header: true,
+                complete: function(results) { 
+                    processData(results.data); 
                     document.getElementById('loader').style.display = 'none';
                 }
             });
@@ -149,64 +159,46 @@
             const tbody = document.getElementById('tableBody');
             tbody.innerHTML = '';
             markers.forEach(m => map.removeLayer(m));
-            markers = [];
-
-            let phu = 0, skors = 0;
+            if(heatLayer) map.removeLayer(heatLayer);
+            
+            let heatPoints = [];
+            let critical = 0;
+            const today = new Date();
 
             data.forEach(row => {
                 if(!row.ID) return;
+                const expDate = new Date(row.Masa_Berlaku);
+                const diffDays = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
+                const color = row.Warna === 'red' ? 'red' : (row.Warna === 'orange' ? 'orange' : 'blue');
+                if (diffDays <= 3 && diffDays >= 0) critical++;
 
-                // Hitung Statistik
-                if(row.Jenis_Sanksi === 'PHU') phu++;
-                if(row.Jenis_Sanksi === 'Skorsing') skors++;
-
-                // Warna Sanksi
-                let pillColor = row.Warna === 'red' ? 'bg-red-100 text-red-700' : (row.Warna === 'orange' ? 'bg-orange-100 text-orange-700' : 'bg-yellow-100 text-yellow-700');
-
-                // Render Baris Tabel
                 tbody.innerHTML += `
-                    <tr class="hover:bg-blue-50/50 transition border-b border-slate-50">
-                        <td class="p-4 font-mono font-bold text-blue-800">${row.ID}</td>
-                        <td class="p-4 font-bold uppercase text-slate-800">${row.Nama}</td>
-                        <td class="p-4 text-slate-500 font-semibold">${row.SA}</td>
-                        <td class="p-4"><span class="status-pill ${pillColor}">${row.Jenis_Sanksi}</span></td>
-                        <td class="p-4 text-slate-500 font-black">${row.Masa_Berlaku}</td>
+                    <tr class="hover:bg-slate-50">
+                        <td class="p-4">
+                            <div class="font-black text-slate-800 uppercase tracking-tighter">${row.Nama}</div>
+                            <div class="text-[9px] text-blue-500">${row.SA}</div>
+                        </td>
+                        <td class="p-4">
+                            <span class="text-[9px] font-black uppercase text-${color}-600 bg-${color}-50 px-2 py-1 rounded-md border border-${color}-100">${row.Jenis_Sanksi}</span>
+                        </td>
+                        <td class="p-4 font-bold text-slate-500">${row.Masa_Berlaku}</td>
                         <td class="p-4 text-center">
-                            <a href="${row.Link_Surat}" target="_blank" class="text-red-500 hover:text-red-700 bg-red-50 p-2 rounded shadow-sm inline-block">
-                                <i class="fa-solid fa-file-pdf"></i>
-                            </a>
+                            <button onclick="openPreview('${row.Link_Surat}', '${row.Nama}')" class="bg-red-50 text-red-600 p-2 rounded-lg border border-red-100"><i class="fa-solid fa-file-pdf"></i></button>
                         </td>
                     </tr>
                 `;
 
-                // LOGIKA MAP: Gunakan koordinat Lat dan Lng dari Spreadsheet
                 if (row.Lat && row.Lng) {
-                    const markerColor = row.Warna === 'red' ? '#dc2626' : (row.Warna === 'orange' ? '#f97316' : '#eab308');
-                    const m = L.circleMarker([parseFloat(row.Lat), parseFloat(row.Lng)], {
-                        radius: 9,
-                        fillColor: markerColor,
-                        color: '#fff',
-                        weight: 2,
-                        fillOpacity: 1
-                    }).addTo(map).bindPopup(`
-                        <div style="font-family:'Inter';">
-                            <b style="text-transform:uppercase; color:#0f172a;">${row.Nama}</b><br>
-                            <span style="font-size:10px; color:#64748b;">Wilayah: ${row.SA}</span><br>
-                            <div style="margin-top:5px; font-weight:bold; color:${markerColor}">${row.Jenis_Sanksi}</div>
-                        </div>
-                    `);
+                    const lat = parseFloat(row.Lat); const lng = parseFloat(row.Lng);
+                    heatPoints.push([lat, lng, 0.5]);
+                    const m = L.circleMarker([lat, lng], { radius: 8, fillColor: (row.Warna === 'red' ? '#dc2626' : '#ea580c'), color: '#fff', weight: 2, fillOpacity: 1 }).addTo(map);
                     markers.push(m);
                 }
             });
-
-            document.getElementById('countPHU').innerText = phu;
-            document.getElementById('countSkorsing').innerText = skors;
-
-            // Auto-Zoom: Sesuaikan pandangan peta agar semua titik terlihat
-            if (markers.length > 0) {
-                const group = new L.featureGroup(markers);
-                map.fitBounds(group.getBounds().pad(0.2));
-            }
+            heatLayer = L.heatLayer(heatPoints, {radius: 20, blur: 15}).addTo(map);
+            document.getElementById('countCritical').innerText = critical;
+            document.getElementById('totalAgen').innerText = data.length;
+            if (markers.length > 0) map.fitBounds(new L.featureGroup(markers).getBounds().pad(0.2));
         }
 
         function filterTable() {
@@ -218,10 +210,7 @@
             }
         }
 
-        window.onload = () => {
-            initMap();
-            fetchSheetData();
-        };
+        window.onload = () => { initMap(); fetchSheetData(); };
     </script>
 </body>
 </html>
