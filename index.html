@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DDMS Mobile Ready - Region II</title>
+    <title>DDMS Login - Region II</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdn.tailwindcss.com"></script>
@@ -16,11 +16,16 @@
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
         body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f8fafc; margin: 0; }
         
-        /* Responsive Sidebar */
+        /* Login Overlay */
+        #loginOverlay {
+            position: fixed; inset: 0; background: #020617; z-index: 5000;
+            display: flex; justify-content: center; align-items: center; padding: 20px;
+        }
+
+        /* Responsive Layout */
         .sidebar { width: 280px; background: #020617; height: 100vh; position: fixed; z-index: 100; color: white; transition: 0.3s; }
-        .main-content { margin-left: 280px; min-height: 100vh; transition: 0.3s; }
+        .main-content { margin-left: 280px; min-height: 100vh; transition: 0.3s; display: none; } /* Hidden before login */
         
-        /* Mobile Breakpoints */
         @media (max-width: 1024px) {
             .sidebar { width: 0; overflow: hidden; padding: 0; }
             .main-content { margin-left: 0; }
@@ -28,90 +33,103 @@
         }
 
         #map { height: 300px !important; width: 100%; border-radius: 12px; z-index: 5; }
-        
-        /* Modal Fullscreen on Mobile */
-        #previewModal { 
-            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 2000; padding: 10px;
-        }
-        .modal-container { 
-            background: white; width: 100%; height: 95vh; margin: auto; border-radius: 12px; display: flex; flex-direction: column; 
-        }
+        #previewModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 2000; padding: 10px; }
     </style>
 </head>
 <body>
 
-    <div id="loader" class="fixed inset-0 bg-white z-[3000] flex justify-center align-center items-center">
+    <div id="loginOverlay">
+        <div class="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-sm border border-slate-200">
+            <div class="text-center mb-8">
+                <img src="https://uploads.onecompiler.io/44ana4zau/44ana4h2n/LOGO%20PATRA%20NIAGA.jpg" class="h-8 mx-auto mb-4 grayscale">
+                <h2 class="text-xl font-black text-slate-800 uppercase tracking-tighter">DDMS Login</h2>
+                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Region II Sumbagsel</p>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-[10px] font-black text-slate-400 uppercase ml-1">Username</label>
+                    <input type="text" id="userInput" class="w-full border-2 border-slate-100 p-3 rounded-xl outline-none focus:border-blue-500 transition-all text-sm font-bold">
+                </div>
+                <div>
+                    <label class="text-[10px] font-black text-slate-400 uppercase ml-1">Password</label>
+                    <input type="password" id="passInput" class="w-full border-2 border-slate-100 p-3 rounded-xl outline-none focus:border-blue-500 transition-all text-sm font-bold">
+                </div>
+                <button onclick="checkLogin()" class="w-full bg-slate-900 text-white p-4 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-600 transition-all shadow-lg shadow-slate-200">
+                    Masuk Dashboard
+                </button>
+                <p id="loginError" class="text-center text-red-500 text-[10px] font-bold hidden uppercase">Kombinasi salah, coba lagi!</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="loader" class="fixed inset-0 bg-white z-[3000] hidden flex justify-center items-center">
         <div class="text-center">
             <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent mx-auto mb-4"></div>
-            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Memuat Dashboard...</p>
+            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest tracking-tighter">Mengunduh Data...</p>
         </div>
     </div>
 
     <div id="previewModal">
-        <div class="modal-container">
-            <div class="p-4 border-b flex justify-between items-center bg-slate-900 text-white rounded-t-xl">
+        <div class="bg-white w-full h-[95vh] rounded-2xl flex flex-col overflow-hidden shadow-2xl max-w-5xl mx-auto">
+            <div class="p-4 border-b flex justify-between items-center bg-slate-900 text-white">
                 <span id="modalTitle" class="text-[10px] font-bold uppercase truncate">Surat Sanksi</span>
-                <button onclick="closePreview()" class="bg-red-600 px-4 py-2 rounded-lg text-[10px] font-black">TUTUP</button>
+                <button onclick="closePreview()" class="bg-red-600 px-5 py-2 rounded-lg text-[10px] font-black hover:bg-red-700 transition-all">TUTUP</button>
             </div>
             <iframe id="pdfFrame" src="" class="w-full flex-grow border-none"></iframe>
         </div>
     </div>
 
-    <header class="lg:hidden bg-slate-900 text-white p-4 flex justify-between items-center sticky top-0 z-[150]">
-        <img src="https://uploads.onecompiler.io/44ana4zau/44ana4h2n/LOGO%20PATRA%20NIAGA.jpg" class="h-6 brightness-200">
-        <button onclick="toggleSidebar()" class="text-xl"><i class="fa-solid fa-bars"></i></button>
-    </header>
-
     <aside id="sidebar" class="sidebar p-8">
-        <div class="hidden lg:flex flex-col items-center mb-10">
-            <img src="https://uploads.onecompiler.io/44ana4zau/44ana4h2n/LOGO%20PATRA%20NIAGA.jpg" class="h-10 brightness-200 mb-4">
-            <h2 class="text-[10px] font-black text-blue-400 uppercase tracking-widest">Region II</h2>
+        <div class="flex flex-col items-center mb-10">
+            <img src="https://uploads.onecompiler.io/44ana4zau/44ana4h2n/LOGO%20PATRA%20NIAGA.jpg" class="h-8 brightness-200 mb-4">
+            <h2 class="text-[9px] font-black text-blue-400 uppercase tracking-widest">Sumbagsel Intelligence</h2>
         </div>
-        <nav class="space-y-4">
-            <button class="w-full flex items-center p-4 bg-blue-600 rounded-xl text-xs font-bold uppercase tracking-widest"><i class="fa-solid fa-home mr-3"></i> Home</button>
-            <button onclick="fetchSheetData()" class="w-full flex items-center p-4 bg-slate-800 rounded-xl text-xs font-bold uppercase tracking-widest mt-4"><i class="fa-solid fa-sync mr-3"></i> Sync Data</button>
+        <nav class="space-y-3">
+            <button class="w-full flex items-center p-4 bg-blue-600 rounded-xl text-[10px] font-black uppercase tracking-widest"><i class="fa-solid fa-home mr-3"></i> Home</button>
+            <button onclick="logout()" class="w-full flex items-center p-4 bg-red-900/30 text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest border border-red-900/50 mt-10 hover:bg-red-600 hover:text-white transition-all"><i class="fa-solid fa-power-off mr-3"></i> Keluar</button>
         </nav>
     </aside>
 
-    <div class="main-content">
-        <header class="hidden lg:flex bg-white border-b p-6 justify-between items-center sticky top-0 z-[50]">
-            <h1 class="text-sm font-black text-slate-800 uppercase tracking-widest">Intelligence Monitoring Sanksi</h1>
-            <span class="text-[10px] bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full font-bold uppercase">● Live System</span>
+    <div id="mainContent" class="main-content">
+        <header class="bg-white border-b p-6 flex justify-between items-center sticky top-0 z-[150]">
+            <h1 class="text-xs font-black text-slate-800 uppercase tracking-widest">Monitoring Sanksi Aktif</h1>
+            <button onclick="toggleSidebar()" class="lg:hidden text-xl"><i class="fa-solid fa-bars"></i></button>
+            <button onclick="fetchSheetData()" class="hidden lg:block bg-slate-900 text-white px-5 py-2 rounded-lg text-[10px] font-black uppercase"><i class="fa-solid fa-sync mr-2"></i> Sync</button>
         </header>
 
         <main class="p-4 lg:p-8 space-y-6">
-            <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6">
-                <div class="lg:col-span-3 bg-white p-3 rounded-2xl border shadow-sm">
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                <div class="lg:col-span-3 bg-white p-3 rounded-3xl border shadow-sm">
                     <div id="map"></div>
                 </div>
                 <div class="grid grid-cols-2 lg:grid-cols-1 gap-4">
-                    <div class="bg-white p-5 rounded-2xl border-l-4 border-l-red-600 shadow-sm text-center lg:text-left">
-                        <p class="text-[9px] font-black text-slate-400 uppercase">Critical (H-3)</p>
+                    <div class="bg-white p-6 rounded-3xl border-l-4 border-l-red-600 shadow-sm">
+                        <p class="text-[9px] font-black text-slate-400 uppercase">Perlu Tindakan</p>
                         <h2 id="countCritical" class="text-3xl font-black text-slate-800">0</h2>
                     </div>
-                    <div class="bg-white p-5 rounded-2xl border-l-4 border-l-blue-600 shadow-sm text-center lg:text-left">
+                    <div class="bg-white p-6 rounded-3xl border-l-4 border-l-blue-600 shadow-sm">
                         <p class="text-[9px] font-black text-slate-400 uppercase">Total Agen</p>
                         <h2 id="totalAgen" class="text-3xl font-black text-slate-800">0</h2>
                     </div>
                 </div>
             </div>
 
-            <div class="bg-white rounded-2xl border shadow-sm overflow-hidden">
-                <div class="p-5 border-b flex flex-col lg:flex-row justify-between items-center gap-4">
-                    <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center lg:text-left">Database Sanksi Aktif</span>
-                    <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Cari..." class="text-xs border px-4 py-2 w-full lg:w-64 rounded-xl outline-none bg-slate-50 focus:bg-white transition-all">
+            <div class="bg-white rounded-3xl border shadow-sm overflow-hidden">
+                <div class="p-6 border-b flex flex-col lg:row justify-between items-center gap-4 bg-slate-50/50">
+                    <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Database Sanksi Region II</span>
+                    <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Cari Agen..." class="text-xs border px-5 py-3 w-full lg:w-72 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition-all">
                 </div>
-                <div class="overflow-x-auto">
+                <div class="overflow-x-auto p-2">
                     <table class="w-full text-left text-[11px]" id="sanksiTable">
-                        <thead class="bg-slate-50 text-slate-400 font-black uppercase">
+                        <thead class="text-slate-400 font-black uppercase border-b">
                             <tr>
-                                <th class="p-4">Informasi Agen</th>
-                                <th class="p-4">Sanksi</th>
-                                <th class="p-4">Berlaku S/D</th>
-                                <th class="p-4 text-center">Surat</th>
+                                <th class="p-5">Nama Agen</th>
+                                <th class="p-5">Jenis Sanksi</th>
+                                <th class="p-5">Masa Berlaku</th>
+                                <th class="p-5 text-center">Surat Sanksi</th>
                             </tr>
                         </thead>
-                        <tbody id="tableBody" class="divide-y divide-slate-100 font-semibold"></tbody>
+                        <tbody id="tableBody" class="divide-y divide-slate-50 font-semibold"></tbody>
                     </table>
                 </div>
             </div>
@@ -122,27 +140,44 @@
         const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTwfjwCymNlkp3pXQCLbQkbjXsgkxRKcRQh8uKocTVi4kRm53B0PLM9EQ3ZTMdCEw0Li_fJPyZYCGjL/pub?gid=0&single=true&output=csv';
         let map, markers = [], heatLayer;
 
+        // LOGIN LOGIC
+        function checkLogin() {
+            const user = document.getElementById('userInput').value;
+            const pass = document.getElementById('passInput').value;
+
+            if (user === 'admin' && pass === '2026') {
+                sessionStorage.setItem('isLoggedIn', 'true');
+                showDashboard();
+            } else {
+                const err = document.getElementById('loginError');
+                err.classList.remove('hidden');
+                setTimeout(() => err.classList.add('hidden'), 3000);
+            }
+        }
+
+        function showDashboard() {
+            document.getElementById('loginOverlay').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'block';
+            document.getElementById('loader').classList.remove('hidden');
+            document.getElementById('loader').classList.add('flex');
+            initMap();
+            fetchSheetData();
+        }
+
+        function logout() {
+            sessionStorage.removeItem('isLoggedIn');
+            location.reload();
+        }
+
+        // SIDEBAR MOBILE
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('active'); }
 
+        // MAP & DATA LOGIC
         function initMap() {
             if (map != undefined) { map.remove(); }
             map = L.map('map', { zoomControl: false }).setView([-3.31, 104.37], 6);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
             L.control.zoom({ position: 'bottomright' }).addTo(map);
-            setTimeout(() => map.invalidateSize(), 800);
-        }
-
-        function openPreview(link, title) {
-            document.getElementById('modalTitle').innerText = title;
-            // Handle Google Drive Link
-            let previewLink = link.includes('drive.google.com') ? link.replace('/view', '/preview') : link;
-            document.getElementById('pdfFrame').src = previewLink;
-            document.getElementById('previewModal').style.display = 'flex';
-        }
-
-        function closePreview() {
-            document.getElementById('previewModal').style.display = 'none';
-            document.getElementById('pdfFrame').src = '';
         }
 
         async function fetchSheetData() {
@@ -150,7 +185,8 @@
                 download: true, header: true,
                 complete: function(results) { 
                     processData(results.data); 
-                    document.getElementById('loader').style.display = 'none';
+                    document.getElementById('loader').classList.add('hidden');
+                    document.getElementById('loader').classList.remove('flex');
                 }
             });
         }
@@ -161,9 +197,7 @@
             markers.forEach(m => map.removeLayer(m));
             if(heatLayer) map.removeLayer(heatLayer);
             
-            let heatPoints = [];
-            let critical = 0;
-            const today = new Date();
+            let heatPoints = []; let critical = 0; const today = new Date();
 
             data.forEach(row => {
                 if(!row.ID) return;
@@ -173,17 +207,21 @@
                 if (diffDays <= 3 && diffDays >= 0) critical++;
 
                 tbody.innerHTML += `
-                    <tr class="hover:bg-slate-50">
-                        <td class="p-4">
-                            <div class="font-black text-slate-800 uppercase tracking-tighter">${row.Nama}</div>
-                            <div class="text-[9px] text-blue-500">${row.SA}</div>
+                    <tr class="hover:bg-blue-50/30 transition">
+                        <td class="p-5">
+                            <div class="font-black text-slate-800 uppercase text-xs">${row.Nama}</div>
+                            <div class="text-[9px] text-blue-500 font-bold uppercase">${row.SA} | ID: ${row.ID}</div>
                         </td>
-                        <td class="p-4">
-                            <span class="text-[9px] font-black uppercase text-${color}-600 bg-${color}-50 px-2 py-1 rounded-md border border-${color}-100">${row.Jenis_Sanksi}</span>
+                        <td class="p-5">
+                            <span class="text-[9px] font-black uppercase text-${color}-600 bg-${color}-50 px-3 py-1.5 rounded-lg border border-${color}-100">
+                                ${row.Jenis_Sanksi}
+                            </span>
                         </td>
-                        <td class="p-4 font-bold text-slate-500">${row.Masa_Berlaku}</td>
-                        <td class="p-4 text-center">
-                            <button onclick="openPreview('${row.Link_Surat}', '${row.Nama}')" class="bg-red-50 text-red-600 p-2 rounded-lg border border-red-100"><i class="fa-solid fa-file-pdf"></i></button>
+                        <td class="p-5 text-slate-500 font-bold">${row.Masa_Berlaku}</td>
+                        <td class="p-5 text-center">
+                            <button onclick="openPreview('${row.Link_Surat}', '${row.Nama}')" class="bg-red-50 text-red-600 px-4 py-2 rounded-xl border border-red-100 font-black hover:bg-red-600 hover:text-white transition-all">
+                                <i class="fa-solid fa-file-pdf mr-1"></i> VIEW
+                            </button>
                         </td>
                     </tr>
                 `;
@@ -201,6 +239,18 @@
             if (markers.length > 0) map.fitBounds(new L.featureGroup(markers).getBounds().pad(0.2));
         }
 
+        function openPreview(link, title) {
+            let previewLink = link.includes('drive.google.com') ? link.replace('/view', '/preview') : link;
+            document.getElementById('pdfFrame').src = previewLink;
+            document.getElementById('modalTitle').innerText = title;
+            document.getElementById('previewModal').style.display = 'flex';
+        }
+
+        function closePreview() {
+            document.getElementById('previewModal').style.display = 'none';
+            document.getElementById('pdfFrame').src = '';
+        }
+
         function filterTable() {
             let input = document.getElementById("searchInput").value.toUpperCase();
             let rows = document.getElementById("tableBody").getElementsByTagName("tr");
@@ -210,7 +260,12 @@
             }
         }
 
-        window.onload = () => { initMap(); fetchSheetData(); };
+        // Check session on load
+        window.onload = () => {
+            if (sessionStorage.getItem('isLoggedIn') === 'true') {
+                showDashboard();
+            }
+        };
     </script>
 </body>
 </html>
